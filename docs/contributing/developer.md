@@ -1,8 +1,10 @@
 # Developer Guide
 
+## Automated Setup
 
+The quickest way to get started is by running `bash ./scripts/setup.sh`, or `make setup` if you already have `make` installed. This script guides you through credential, tool, EKS cluster, and CRD setup.
 
-## Prerequisites
+## Manual Setup
 
 **Tools**
 
@@ -31,9 +33,9 @@ Before proceeding to the next sections, you need to:
     git clone git@github.com:aws/aws-application-networking-k8s.git
     cd aws-application-networking-k8s
     ```
-1. Install dependencies with `toolchain.sh` script:
+1. Install dependencies with `setup.sh` script:
     ```bash
-    make toolchain
+    make setup
     ```
 
 
@@ -41,18 +43,13 @@ Before proceeding to the next sections, you need to:
 
 Once cluster is ready, we need to apply CRDs for `gateway-api` resources. First install core `gateway-api` CRDs:
 
-=== "v1 CRDs (latest, recommended)"
+=== "v1.2 CRDs"
     Install the latest `v1` CRDs:
     ```bash
-    kubectl apply -f config/crds/bases/k8s-gateway-v1.0.0.yaml
+    kubectl kustomize "github.com/kubernetes-sigs/gateway-api/config/crd?ref=v1.2.0" | kubectl apply -f -
     ```
     !!! Note
-        Note that v1 CRDs are **not included** in `deploy-*.yaml` and `helm` chart by default. 
-=== "v1beta1 CRDs"
-    Install `gateway-api` `v1beta1` CRDs.
-    ```bash
-    kubectl apply -f config/crds/bases/k8s-gateway-v0.6.1.yaml
-    ```
+        Note that v1 CRDs are **not included** in `deploy-*.yaml` and `helm` chart. 
 
 And install additional CRDs for the controller:
 

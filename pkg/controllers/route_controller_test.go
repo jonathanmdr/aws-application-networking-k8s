@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"context"
+	"testing"
+
 	mock_client "github.com/aws/aws-application-networking-k8s/mocks/controller-runtime/client"
 	anv1alpha1 "github.com/aws/aws-application-networking-k8s/pkg/apis/applicationnetworking/v1alpha1"
 	aws2 "github.com/aws/aws-application-networking-k8s/pkg/aws"
@@ -26,8 +28,7 @@ import (
 	testclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/external-dns/endpoint"
-	gwv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
-	"testing"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 func TestRouteReconciler_ReconcileCreates(t *testing.T) {
@@ -40,37 +41,36 @@ func TestRouteReconciler_ReconcileCreates(t *testing.T) {
 
 	k8sScheme := runtime.NewScheme()
 	clientgoscheme.AddToScheme(k8sScheme)
-	gwv1beta1.AddToScheme(k8sScheme)
+	gwv1.Install(k8sScheme)
 	discoveryv1.AddToScheme(k8sScheme)
 	addOptionalCRDs(k8sScheme)
 
 	k8sClient := testclient.
 		NewClientBuilder().
 		WithScheme(k8sScheme).
-		WithStatusSubresource(&gwv1beta1.HTTPRoute{}).
+		WithStatusSubresource(&gwv1.HTTPRoute{}).
 		Build()
 
-	gwClass := &gwv1beta1.GatewayClass{
+	gwClass := &gwv1.GatewayClass{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "amazon-vpc-lattice",
-			Namespace: defaultNamespace,
+			Name: "amazon-vpc-lattice",
 		},
-		Spec: gwv1beta1.GatewayClassSpec{
+		Spec: gwv1.GatewayClassSpec{
 			ControllerName: config.LatticeGatewayControllerName,
 		},
-		Status: gwv1beta1.GatewayClassStatus{},
+		Status: gwv1.GatewayClassStatus{},
 	}
 	k8sClient.Create(ctx, gwClass.DeepCopy())
 
 	// here we have a gateway, service, and route
-	gw := &gwv1beta1.Gateway{
+	gw := &gwv1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-gateway",
 			Namespace: "ns1",
 		},
-		Spec: gwv1beta1.GatewaySpec{
+		Spec: gwv1.GatewaySpec{
 			GatewayClassName: "amazon-vpc-lattice",
-			Listeners: []gwv1beta1.Listener{
+			Listeners: []gwv1.Listener{
 				{
 					Name:     "http",
 					Protocol: "HTTP",
@@ -79,6 +79,25 @@ func TestRouteReconciler_ReconcileCreates(t *testing.T) {
 			},
 		},
 	}
+
+	notVpcLattice := &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "not-vpc-lattice",
+			Namespace: "ns1",
+		},
+		Spec: gwv1.GatewaySpec{
+			GatewayClassName: "not-amazon-vpc-lattice",
+			Listeners: []gwv1.Listener{
+				{
+					Name:     "http",
+					Protocol: "HTTP",
+					Port:     80,
+				},
+			},
+		},
+	}
+
+	k8sClient.Create(ctx, notVpcLattice.DeepCopy())
 	k8sClient.Create(ctx, gw.DeepCopy())
 
 	svc := &corev1.Service{
@@ -121,27 +140,31 @@ func TestRouteReconciler_ReconcileCreates(t *testing.T) {
 	}
 	k8sClient.Create(ctx, epSlice.DeepCopy())
 
-	kind := gwv1beta1.Kind("Service")
-	port := gwv1beta1.PortNumber(80)
-	route := gwv1beta1.HTTPRoute{
+	kind := gwv1.Kind("Service")
+	port := gwv1.PortNumber(80)
+	route := gwv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-route",
 			Namespace: "ns1",
 		},
-		Spec: gwv1beta1.HTTPRouteSpec{
-			CommonRouteSpec: gwv1beta1.CommonRouteSpec{
-				ParentRefs: []gwv1beta1.ParentReference{
+		Spec: gwv1.HTTPRouteSpec{
+			CommonRouteSpec: gwv1.CommonRouteSpec{
+				ParentRefs: []gwv1.ParentReference{
+					// if route has multiple parents, we'll only use the managed vpc lattice gateway
+					{
+						Name: "not-vpc-lattice",
+					},
 					{
 						Name: "my-gateway",
 					},
 				},
 			},
-			Rules: []gwv1beta1.HTTPRouteRule{
+			Rules: []gwv1.HTTPRouteRule{
 				{
-					BackendRefs: []gwv1beta1.HTTPBackendRef{
+					BackendRefs: []gwv1.HTTPBackendRef{
 						{
-							BackendRef: gwv1beta1.BackendRef{
-								BackendObjectReference: gwv1beta1.BackendObjectReference{
+							BackendRef: gwv1.BackendRef{
+								BackendObjectReference: gwv1.BackendObjectReference{
 									Kind: &kind,
 									Name: "my-service",
 									Port: &port,

@@ -2,12 +2,13 @@ package integration
 
 import (
 	"fmt"
+	"strings"
+	"time"
+
 	anaws "github.com/aws/aws-application-networking-k8s/pkg/aws"
 	"github.com/aws/aws-application-networking-k8s/pkg/utils"
 	arn2 "github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
-	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -24,8 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
-	gwv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	anv1alpha1 "github.com/aws/aws-application-networking-k8s/pkg/apis/applicationnetworking/v1alpha1"
 	"github.com/aws/aws-application-networking-k8s/pkg/aws/services"
@@ -33,7 +34,6 @@ import (
 	"github.com/aws/aws-application-networking-k8s/pkg/model/core"
 	"github.com/aws/aws-application-networking-k8s/pkg/model/lattice"
 	"github.com/aws/aws-application-networking-k8s/test/pkg/test"
-	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 var _ = Describe("Access Log Policy", Ordered, func() {
@@ -76,7 +76,7 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 		httpK8sService    *corev1.Service
 		grpcK8sService    *corev1.Service
 		httpRoute         *gwv1.HTTPRoute
-		grpcRoute         *gwv1alpha2.GRPCRoute
+		grpcRoute         *gwv1.GRPCRoute
 		bucketArn         string
 		logGroupArn       string
 		logGroup2Arn      string
@@ -87,6 +87,9 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 	)
 
 	BeforeAll(func() {
+		SetDefaultEventuallyTimeout(5 * time.Minute)
+		SetDefaultEventuallyPollingInterval(10 * time.Second)
+
 		awsResourceName = awsResourceNamePrefix + utils.RandomAlphaString(10)
 
 		tags := testFramework.NewTestTags(testSuite)
@@ -196,16 +199,16 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 		// Create GRPC Route, Service, and Deployment
 		grpcAppOptions := test.GrpcAppOptions{AppName: k8sResourceName, Namespace: k8snamespace}
 		grpcDeployment, grpcK8sService = testFramework.NewGrpcBin(grpcAppOptions)
-		grpcRouteRules := []gwv1alpha2.GRPCRouteRule{
+		grpcRouteRules := []gwv1.GRPCRouteRule{
 			{
-				BackendRefs: []gwv1alpha2.GRPCBackendRef{
+				BackendRefs: []gwv1.GRPCBackendRef{
 					{
-						BackendRef: gwv1alpha2.BackendRef{
-							BackendObjectReference: gwv1beta1.BackendObjectReference{
+						BackendRef: gwv1.BackendRef{
+							BackendObjectReference: gwv1.BackendObjectReference{
 								Name:      gwv1alpha2.ObjectName(grpcK8sService.Name),
-								Namespace: lo.ToPtr(gwv1beta1.Namespace(grpcK8sService.Namespace)),
-								Kind:      (*gwv1beta1.Kind)(lo.ToPtr("Service")),
-								Port:      lo.ToPtr(gwv1beta1.PortNumber(19000)),
+								Namespace: lo.ToPtr(gwv1.Namespace(grpcK8sService.Namespace)),
+								Kind:      (*gwv1.Kind)(lo.ToPtr("Service")),
+								Port:      lo.ToPtr(gwv1.PortNumber(19000)),
 							},
 						},
 					},
@@ -224,8 +227,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(bucketArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "Gateway",
 					Name:      gwv1alpha2.ObjectName(testGateway.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -283,8 +286,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(bucketArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "HTTPRoute",
 					Name:      gwv1alpha2.ObjectName(httpRoute.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -309,7 +312,7 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			g.Expect(alp.Status.Conditions[0].Reason).To(BeEquivalentTo(string(gwv1alpha2.PolicyReasonAccepted)))
 
 			// VPC Lattice Service should have Access Log Subscription with S3 Bucket destination
-			latticeService := testFramework.GetVpcLatticeService(ctx, core.NewHTTPRoute(gwv1beta1.HTTPRoute(*httpRoute)))
+			latticeService := testFramework.GetVpcLatticeService(ctx, core.NewHTTPRoute(gwv1.HTTPRoute(*httpRoute)))
 			listALSInput := &vpclattice.ListAccessLogSubscriptionsInput{
 				ResourceIdentifier: latticeService.Arn,
 			}
@@ -343,8 +346,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(bucketArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "GRPCRoute",
 					Name:      gwv1alpha2.ObjectName(grpcRoute.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -404,8 +407,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(bucketArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "Gateway",
 					Name:      gwv1alpha2.ObjectName(testGateway.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -422,8 +425,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(logGroupArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "Gateway",
 					Name:      gwv1alpha2.ObjectName(testGateway.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -440,8 +443,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(deliveryStreamArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "Gateway",
 					Name:      gwv1alpha2.ObjectName(testGateway.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -492,8 +495,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(bucketArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "Gateway",
 					Name:      gwv1alpha2.ObjectName(testGateway.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -509,8 +512,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(bucketArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "Gateway",
 					Name:      gwv1alpha2.ObjectName(testGateway.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -544,8 +547,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(bucketArn + "foo"),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "Gateway",
 					Name:      gwv1alpha2.ObjectName(testGateway.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -579,7 +582,7 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(bucketArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
 					Group:     "invalid",
 					Kind:      "Gateway",
 					Name:      gwv1alpha2.ObjectName(testGateway.Name),
@@ -614,8 +617,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(bucketArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "Service",
 					Name:      gwv1alpha2.ObjectName(testGateway.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -645,7 +648,7 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 		originalAlsArn := ""
 		currentAlsArn := ""
 		expectedGeneration := 1
-		latticeService := testFramework.GetVpcLatticeService(ctx, core.NewHTTPRoute(gwv1beta1.HTTPRoute(*httpRoute)))
+		latticeService := testFramework.GetVpcLatticeService(ctx, core.NewHTTPRoute(gwv1.HTTPRoute(*httpRoute)))
 		accessLogPolicy := &anv1alpha1.AccessLogPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      k8sResourceName,
@@ -653,8 +656,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(logGroupArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "Gateway",
 					Name:      gwv1alpha2.ObjectName(testGateway.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -789,8 +792,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 		alp = &anv1alpha1.AccessLogPolicy{}
 		err = testFramework.Client.Get(ctx, alpNamespacedName, alp)
 		Expect(err).To(BeNil())
-		alp.Spec.TargetRef = &gwv1alpha2.PolicyTargetReference{
-			Group:     gwv1beta1.GroupName,
+		alp.Spec.TargetRef = &gwv1alpha2.NamespacedPolicyTargetReference{
+			Group:     gwv1.GroupName,
 			Kind:      "HTTPRoute",
 			Name:      gwv1alpha2.ObjectName(httpRoute.Name),
 			Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -883,8 +886,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 		err = testFramework.Client.Get(ctx, alpNamespacedName, alp)
 		Expect(err).To(BeNil())
 		alp.Spec.DestinationArn = aws.String(bucketArn)
-		alp.Spec.TargetRef = &gwv1alpha2.PolicyTargetReference{
-			Group:     gwv1beta1.GroupName,
+		alp.Spec.TargetRef = &gwv1alpha2.NamespacedPolicyTargetReference{
+			Group:     gwv1.GroupName,
 			Kind:      "Gateway",
 			Name:      "doesnotexist",
 			Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -961,8 +964,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(logGroupArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "HTTPRoute",
 					Name:      gwv1alpha2.ObjectName(httpRoute.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -993,8 +996,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 		Expect(err).To(BeNil())
 		alp.Spec = anv1alpha1.AccessLogPolicySpec{
 			DestinationArn: aws.String(logGroupArn),
-			TargetRef: &gwv1alpha2.PolicyTargetReference{
-				Group:     gwv1beta1.GroupName,
+			TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+				Group:     gwv1.GroupName,
 				Kind:      "HTTPRoute",
 				Name:      gwv1alpha2.ObjectName(httpRoute.Name),
 				Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -1035,8 +1038,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(bucketArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "Gateway",
 					Name:      gwv1alpha2.ObjectName(testGateway.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -1077,8 +1080,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(bucketArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "HTTPRoute",
 					Name:      gwv1alpha2.ObjectName(httpRoute.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -1087,7 +1090,7 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 		}
 		testFramework.ExpectCreated(ctx, accessLogPolicy)
 
-		latticeService := testFramework.GetVpcLatticeService(ctx, core.NewHTTPRoute(gwv1beta1.HTTPRoute(*httpRoute)))
+		latticeService := testFramework.GetVpcLatticeService(ctx, core.NewHTTPRoute(gwv1.HTTPRoute(*httpRoute)))
 
 		Eventually(func(g Gomega) {
 			// VPC Lattice Service should have an Access Log Subscription
@@ -1121,8 +1124,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(bucketArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "GRPCRoute",
 					Name:      gwv1alpha2.ObjectName(grpcRoute.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -1179,8 +1182,8 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			},
 			Spec: anv1alpha1.AccessLogPolicySpec{
 				DestinationArn: aws.String(bucketArn),
-				TargetRef: &gwv1alpha2.PolicyTargetReference{
-					Group:     gwv1beta1.GroupName,
+				TargetRef: &gwv1alpha2.NamespacedPolicyTargetReference{
+					Group:     gwv1.GroupName,
 					Kind:      "HTTPRoute",
 					Name:      gwv1alpha2.ObjectName(route.Name),
 					Namespace: (*gwv1alpha2.Namespace)(aws.String(k8snamespace)),
@@ -1194,7 +1197,7 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			Namespace: accessLogPolicy.Namespace,
 		}
 
-		latticeService := testFramework.GetVpcLatticeService(ctx, core.NewHTTPRoute(gwv1beta1.HTTPRoute(*route)))
+		latticeService := testFramework.GetVpcLatticeService(ctx, core.NewHTTPRoute(gwv1.HTTPRoute(*route)))
 
 		Eventually(func(g Gomega) {
 			// VPC Lattice Service should have an Access Log Subscription

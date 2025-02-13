@@ -22,6 +22,10 @@ Set your AWS Region and Cluster Name as environment variables. See the [Amazon V
    export CLUSTER_NAME=<cluster_name>
    ```
 
+**Install Gateway API CRDs**
+
+The latest Gateway API CRDs are available [here](https://gateway-api.sigs.k8s.io/). Please [follow this installation](https://gateway-api.sigs.k8s.io/guides/#installing-gateway-api) process.
+
 **Create a cluster (optional)**
 
 You can easily create a cluster with `eksctl`, the CLI for Amazon EKS:
@@ -181,7 +185,7 @@ You can choose from [Pod Identities](https://docs.aws.amazon.com/eks/latest/user
         # Run helm with either install or upgrade
         helm install gateway-api-controller \
             oci://public.ecr.aws/aws-application-networking-k8s/aws-gateway-controller-chart \
-            --version=v1.0.6 \
+            --version=v1.1.0 \
             --set=serviceAccount.create=false \
             --namespace aws-application-networking-system \
             --set=log.level=info # use "debug" for debug level logs
@@ -190,7 +194,7 @@ You can choose from [Pod Identities](https://docs.aws.amazon.com/eks/latest/user
     === "Kubectl"
 
         ```bash 
-        kubectl apply -f https://raw.githubusercontent.com/aws/aws-application-networking-k8s/main/files/controller-installation/deploy-v1.0.6.yaml
+        kubectl apply -f https://raw.githubusercontent.com/aws/aws-application-networking-k8s/main/files/controller-installation/deploy-v1.1.0.yaml
         ```
 
 

@@ -7,8 +7,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
-	gwv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	"github.com/aws/aws-application-networking-k8s/pkg/utils"
 )
@@ -82,7 +82,7 @@ func (r *TLSRoute) Inner() *gwv1alpha2.TLSRoute {
 
 func (r *TLSRoute) GroupKind() metav1.GroupKind {
 	return metav1.GroupKind{
-		Group: gwv1beta1.GroupName,
+		Group: gwv1.GroupName,
 		Kind:  TlsRouteKind,
 	}
 }
@@ -91,11 +91,11 @@ type TLSRouteSpec struct {
 	s gwv1alpha2.TLSRouteSpec
 }
 
-func (s *TLSRouteSpec) ParentRefs() []gwv1beta1.ParentReference {
+func (s *TLSRouteSpec) ParentRefs() []gwv1.ParentReference {
 	return s.s.ParentRefs
 }
 
-func (s *TLSRouteSpec) Hostnames() []gwv1beta1.Hostname {
+func (s *TLSRouteSpec) Hostnames() []gwv1.Hostname {
 	return s.s.Hostnames
 }
 
@@ -139,25 +139,35 @@ type TLSRouteStatus struct {
 	s *gwv1alpha2.TLSRouteStatus
 }
 
-func (s *TLSRouteStatus) Parents() []gwv1beta1.RouteParentStatus {
+func (s *TLSRouteStatus) Parents() []gwv1.RouteParentStatus {
 	return s.s.Parents
 }
 
-func (s *TLSRouteStatus) SetParents(parents []gwv1beta1.RouteParentStatus) {
+func (s *TLSRouteStatus) SetParents(parents []gwv1.RouteParentStatus) {
 	s.s.Parents = parents
 }
 
-func (s *TLSRouteStatus) UpdateParentRefs(parent gwv1beta1.ParentReference, controllerName gwv1beta1.GatewayController) {
-	if len(s.Parents()) == 0 {
-		s.SetParents(make([]gwv1beta1.RouteParentStatus, 1))
+func (s *TLSRouteStatus) UpdateParentRefs(parent gwv1.ParentReference, controllerName gwv1.GatewayController) {
+	for i, p := range s.Parents() {
+		if p.ParentRef.Name == parent.Name {
+			s.Parents()[i].ParentRef = parent
+			s.Parents()[i].ControllerName = controllerName
+			return
+		}
 	}
-
-	s.Parents()[0].ParentRef = parent
-	s.Parents()[0].ControllerName = controllerName
+	s.SetParents(append(s.Parents(), gwv1.RouteParentStatus{
+		ParentRef:      parent,
+		ControllerName: controllerName,
+	}))
 }
 
-func (s *TLSRouteStatus) UpdateRouteCondition(condition metav1.Condition) {
-	s.Parents()[0].Conditions = utils.GetNewConditions(s.Parents()[0].Conditions, condition)
+func (s *TLSRouteStatus) UpdateRouteCondition(parent gwv1.ParentReference, condition metav1.Condition) {
+	for i, p := range s.Parents() {
+		if p.ParentRef.Name == parent.Name {
+			s.Parents()[i].Conditions = utils.GetNewConditions(p.Conditions, condition)
+			return
+		}
+	}
 }
 
 type TLSRouteRule struct {
@@ -208,30 +218,30 @@ func (r *TLSRouteRule) Equals(routeRule RouteRule) bool {
 }
 
 type TLSBackendRef struct {
-	r gwv1alpha2.BackendRef
+	r gwv1.BackendRef
 }
 
 func (r *TLSBackendRef) Weight() *int32 {
 	return r.r.Weight
 }
 
-func (r *TLSBackendRef) Group() *gwv1beta1.Group {
+func (r *TLSBackendRef) Group() *gwv1.Group {
 	return r.r.Group
 }
 
-func (r *TLSBackendRef) Kind() *gwv1beta1.Kind {
+func (r *TLSBackendRef) Kind() *gwv1.Kind {
 	return r.r.Kind
 }
 
-func (r *TLSBackendRef) Name() gwv1beta1.ObjectName {
+func (r *TLSBackendRef) Name() gwv1.ObjectName {
 	return r.r.Name
 }
 
-func (r *TLSBackendRef) Namespace() *gwv1beta1.Namespace {
+func (r *TLSBackendRef) Namespace() *gwv1.Namespace {
 	return r.r.Namespace
 }
 
-func (r *TLSBackendRef) Port() *gwv1beta1.PortNumber {
+func (r *TLSBackendRef) Port() *gwv1.PortNumber {
 	return r.r.Port
 }
 

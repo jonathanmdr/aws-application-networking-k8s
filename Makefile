@@ -13,7 +13,7 @@ VERSION ?= $(if $(RELEASE_VERSION),$(RELEASE_VERSION),$(shell git tag --sort=v:r
 ECRIMAGES ?=public.ecr.aws/aws-application-networking-k8s/aws-gateway-controller:${VERSION}
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.22
+ENVTEST_K8S_VERSION = 1.32
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -75,7 +75,7 @@ lint: ## Run the golangci-lint only in local machine
 		echo "Running golangci-lint"; \
 		golangci-lint run; \
 	else \
-		echo "Error: golangci-lint is not installed. Please run the 'make toolchain'"; \
+		echo "Error: golangci-lint is not installed. Please run the 'make setup'"; \
 		exit 1; \
 	fi \
 
@@ -84,9 +84,9 @@ lint: ## Run the golangci-lint only in local machine
 test: ## Run tests.
 	go test ./pkg/... -coverprofile coverage.out
 
-.PHONY: toolchain
-toolchain: ## Install developer toolchain
-	./hack/toolchain.sh
+.PHONY: setup
+setup:
+	./scripts/setup.sh
 
 ##@ Deployment
 
@@ -106,9 +106,9 @@ build-deploy: ## Create a deployment file that can be applied with `kubectl appl
 
 .PHONY: manifest
 manifest: ## Generate CRD manifest
-	go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.13.0 object paths=./pkg/apis/...
-	go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.13.0 crd paths=./pkg/apis/... output:crd:artifacts:config=config/crds/bases
-	go run k8s.io/code-generator/cmd/register-gen@v0.28.0 --input-dirs ./pkg/apis/applicationnetworking/v1alpha1 --output-base ./ --go-header-file hack/boilerplate.go.txt
+	go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.5 object paths=./pkg/apis/...
+	go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.5 crd paths=./pkg/apis/... output:crd:artifacts:config=config/crds/bases
+	go run k8s.io/code-generator/cmd/register-gen@v0.31.1 --logtostderr ./pkg/apis/applicationnetworking/v1alpha1 --go-header-file hack/boilerplate.go.txt
 	cp config/crds/bases/application-networking.k8s.aws* helm/crds
 
 e2e-test-namespace := "e2e-test"
