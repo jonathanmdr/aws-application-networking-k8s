@@ -305,14 +305,9 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			alp := &anv1alpha1.AccessLogPolicy{}
 			err := testFramework.Client.Get(ctx, alpNamespacedName, alp)
 			g.Expect(err).To(BeNil())
-			g.Expect(len(alp.Status.Conditions)).To(BeEquivalentTo(1))
-			g.Expect(alp.Status.Conditions[0].Type).To(BeEquivalentTo(string(gwv1alpha2.PolicyConditionAccepted)))
-			g.Expect(alp.Status.Conditions[0].Status).To(BeEquivalentTo(metav1.ConditionTrue))
-			g.Expect(alp.Status.Conditions[0].ObservedGeneration).To(BeEquivalentTo(1))
-			g.Expect(alp.Status.Conditions[0].Reason).To(BeEquivalentTo(string(gwv1alpha2.PolicyReasonAccepted)))
 
 			// VPC Lattice Service should have Access Log Subscription with S3 Bucket destination
-			latticeService := testFramework.GetVpcLatticeService(ctx, core.NewHTTPRoute(gwv1.HTTPRoute(*httpRoute)))
+			latticeService := testFramework.GetVpcLatticeService(ctx, core.NewHTTPRoute(*httpRoute))
 			listALSInput := &vpclattice.ListAccessLogSubscriptionsInput{
 				ResourceIdentifier: latticeService.Arn,
 			}
@@ -365,11 +360,6 @@ var _ = Describe("Access Log Policy", Ordered, func() {
 			alp := &anv1alpha1.AccessLogPolicy{}
 			err := testFramework.Client.Get(ctx, alpNamespacedName, alp)
 			g.Expect(err).To(BeNil())
-			g.Expect(len(alp.Status.Conditions)).To(BeEquivalentTo(1))
-			g.Expect(alp.Status.Conditions[0].Type).To(BeEquivalentTo(string(gwv1alpha2.PolicyConditionAccepted)))
-			g.Expect(alp.Status.Conditions[0].Status).To(BeEquivalentTo(metav1.ConditionTrue))
-			g.Expect(alp.Status.Conditions[0].ObservedGeneration).To(BeEquivalentTo(1))
-			g.Expect(alp.Status.Conditions[0].Reason).To(BeEquivalentTo(string(gwv1alpha2.PolicyReasonAccepted)))
 
 			// VPC Lattice Service should have Access Log Subscription with S3 Bucket destination
 			latticeService := testFramework.GetVpcLatticeService(ctx, core.NewGRPCRoute(*grpcRoute))

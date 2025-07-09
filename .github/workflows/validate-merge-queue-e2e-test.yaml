@@ -37,6 +37,8 @@ jobs:
           cache-dependency-path: test/go.sum
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          version: latest
       - name: Setup AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -57,6 +59,8 @@ jobs:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env['ACTIONS_CACHE_URL'])
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env['ACTIONS_RUNTIME_TOKEN'])
+            core.exportVariable('ACTIONS_RESULTS_URL', process.env['ACTIONS_RESULTS_URL'])
+            core.exportVariable('ACTIONS_CACHE_SERVICE_V2', process.env['ACTIONS_CACHE_SERVICE_V2'])
       - name: Build and push image
         run: |
           SKIP_BUILD_CHART=true scripts/release-controller.sh
@@ -71,6 +75,16 @@ jobs:
       - name: Install Gateway API v1.2 CRDs
         run: |
           kubectl kustomize "github.com/kubernetes-sigs/gateway-api/config/crd?ref=v1.2.0" | kubectl apply -f -
+      - name: Install latest custom CRDs
+        run: |
+          kubectl apply -f config/crds/bases/externaldns.k8s.io_dnsendpoints.yaml
+          kubectl apply -f config/crds/bases/gateway.networking.k8s.io_tlsroutes.yaml
+          kubectl apply -f config/crds/bases/application-networking.k8s.aws_serviceexports.yaml
+          kubectl apply -f config/crds/bases/application-networking.k8s.aws_serviceimports.yaml
+          kubectl apply -f config/crds/bases/application-networking.k8s.aws_targetgrouppolicies.yaml
+          kubectl apply -f config/crds/bases/application-networking.k8s.aws_vpcassociationpolicies.yaml
+          kubectl apply -f config/crds/bases/application-networking.k8s.aws_accesslogpolicies.yaml
+          kubectl apply -f config/crds/bases/application-networking.k8s.aws_iamauthpolicies.yaml
       - name: Create Lattice GatewayClass
         run: |
           kubectl apply -f files/controller-installation/gatewayclass.yaml

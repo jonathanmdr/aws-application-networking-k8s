@@ -182,7 +182,7 @@ func (r *accessLogPolicyReconciler) reconcileUpsert(ctx context.Context, alp *an
 	targetRefNamespace := k8s.NamespaceOrDefault(alp.Spec.TargetRef.Namespace)
 	if targetRefNamespace != alp.Namespace {
 		message := fmt.Sprintf("The targetRef's namespace, \"%s\", does not match the Access Log Policy's"+
-			" namespace, \"%s\"", string(*alp.Spec.TargetRef.Namespace), alp.Namespace)
+			" namespace, \"%s\"", targetRefNamespace, alp.Namespace)
 		r.eventRecorder.Event(alp, corev1.EventTypeWarning, k8s.FailedReconcileEvent, message)
 		return r.updateAccessLogPolicyStatus(ctx, alp, gwv1alpha2.PolicyReasonInvalid, message)
 	}
@@ -247,7 +247,7 @@ func (r *accessLogPolicyReconciler) targetRefExists(ctx context.Context, alp *an
 		grpcRoute := &gwv1.GRPCRoute{}
 		err = r.client.Get(ctx, targetRefNamespacedName, grpcRoute)
 	default:
-		return false, fmt.Errorf("Access Log Policy targetRef is for unsupported Kind: %s", alp.Spec.TargetRef.Kind)
+		return false, fmt.Errorf("access Log Policy targetRef is for unsupported Kind: %s", alp.Spec.TargetRef.Kind)
 	}
 
 	if err != nil && !errors.IsNotFound(err) {
@@ -294,10 +294,10 @@ func (r *accessLogPolicyReconciler) updateAccessLogPolicyAnnotations(
 	for _, als := range accessLogSubscriptions {
 		if als.Spec.EventType != core.DeleteEvent {
 			oldAlp := alp.DeepCopy()
-			if alp.ObjectMeta.Annotations == nil {
-				alp.ObjectMeta.Annotations = make(map[string]string)
+			if alp.Annotations == nil {
+				alp.Annotations = make(map[string]string)
 			}
-			alp.ObjectMeta.Annotations[anv1alpha1.AccessLogSubscriptionAnnotationKey] = als.Status.Arn
+			alp.Annotations[anv1alpha1.AccessLogSubscriptionAnnotationKey] = als.Status.Arn
 			if err := r.client.Patch(ctx, alp, client.MergeFrom(oldAlp)); err != nil {
 				r.eventRecorder.Event(alp, corev1.EventTypeWarning, k8s.FailedReconcileEvent,
 					"Failed to update annotation due to "+err.Error())
